@@ -6,15 +6,18 @@
 """
 Biblioteca Gráfica / Graphics Library.
 
-Desenvolvido por: <SEU NOME AQUI>
+Desenvolvido por: Edgard Ortiz Neto
 Disciplina: Computação Gráfica
-Data: <DATA DE INÍCIO DA IMPLEMENTAÇÃO>
+Data: 24 de fevereiro de 2023
 """
 
 import time         # Para operações com tempo
 import gpu          # Simula os recursos de uma GPU
 import math         # Funções matemáticas
 import numpy as np  # Biblioteca do Numpy
+
+# Numpy
+import numpy as np
 
 class GL:
     """Classe que representa a biblioteca gráfica (Graphics Library)."""
@@ -47,10 +50,16 @@ class GL:
         print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
         print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
+        R = colors['emissiveColor'][0]*255
+        G = colors['emissiveColor'][1]*255
+        B = colors['emissiveColor'][2]*255
+
         # Exemplo:
-        pos_x = GL.width//2
-        pos_y = GL.height//2
-        gpu.GPU.draw_pixel([pos_x, pos_y], gpu.GPU.RGB8, [255, 0, 0])  # altera pixel (u, v, tipo, r, g, b)
+        # pos_x = GL.width//2
+        # pos_y = GL.height//2
+        for i in range(0,len(point),2):
+            gpu.GPU.draw_pixel([int(point[i]), int(point[i+1])], gpu.GPU.RGB8, [R, G, B])  # altera pixel (u, v, tipo, r, g, b)
+            #gpu.GPU.draw_pixel([GL.height//2, GL.width//2], gpu.GPU.RGB8, [R, G, B])
         # cuidado com as cores, o X3D especifica de (0,1) e o Framebuffer de (0,255)
         
     @staticmethod
@@ -68,13 +77,56 @@ class GL:
 
         print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
         print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
+
+        x0 = []
+        y0 = []
+        x1 = []
+        y1 = []
+
+        for i in range(0,len(lineSegments),4):
+            x0.append(int(lineSegments[i]))
+            y0.append(int(lineSegments[i+1]))
+            x1.append(int(lineSegments[i+2]))
+            y1.append(int(lineSegments[i+3]))
+
+        dx = []
+        dy = []
+        error = []
+        sx = []
+        sy = []
+
+        for i in range(len(x0)):
+            dx.append(abs(x1[i]-x0[i]))
+            dy.append(-abs(y1[i]-y0[i]))
+            error.append(dx[i]+dy[i])
+            sx.append(1 if x0 < x1 else -1)
+            sy.append(1 if y0 < y1 else -1)
+            
+            while True:
+                GL.polypoint2D([x0[i], y0[i]], colors) 
+                if 2*error[i] >= dy[i]:
+                    if x0[i] == x1[i]:
+                        break
+                    x0[i]  += sx[i]
+                    error[i] += dy[i]
+                    
+                if 2*error[i] <= dx[i]:
+                    if y0[i] == y1[i]:
+                        break
+                    y0[i]  += sy[i]
+                    error[i] += dx[i]
+                     
         
         # Exemplo:
-        pos_x = GL.width//2
-        pos_y = GL.height//2
-        gpu.GPU.draw_pixel([pos_x, pos_y], gpu.GPU.RGB8, [255, 0, 255])  # altera pixel (u, v, tipo, r, g, b)
+        # pos_x = GL.width//2
+        # pos_y = GL.height//2
+        #gpu.GPU.draw_pixel([pos_x, pos_y], gpu.GPU.RGB8, [R, G, B])  # altera pixel (u, v, tipo, r, g, b)
         # cuidado com as cores, o X3D especifica de (0,1) e o Framebuffer de (0,255)
 
+    @staticmethod
+    def L(x, y, x0, y0, x1, y1):
+        return (y1-y0)*x - (x1-x0)*y + y0*(x1-x0) - x0*(y1-y0)
+    
     @staticmethod
     def triangleSet2D(vertices, colors):
         """Função usada para renderizar TriangleSet2D."""
@@ -88,8 +140,35 @@ class GL:
         print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
         print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
+        x0 = []
+        y0 = []
+        x1 = []
+        y1 = []
+        x2 = []
+        y2 = []
+        for i in range(0,len(vertices),6): 
+            x0.append(int(vertices[i]))
+            y0.append(int(vertices[i+1]))
+            x1.append(int(vertices[i+2]))
+            y1.append(int(vertices[i+3]))
+            x2.append(int(vertices[i+4]))
+            y2.append(int(vertices[i+5]))
+
+        for index in range(x0):
+            x_max, x_min = max(x0[index],x1[index],x2[index]),min(x0[index],x1[index],x2[index])
+            y_max, y_min = max(y0[index],y1[index],y2[index]),min(y0[index],y1[index],y2[index])
+
+            for i in range(x_min,x_max):
+                for j in range(y_min,y_max):
+                    L1 = GL.L(i,j,x0[index],y0[index],x1[index],y1[index])
+                    L2 = GL.L(i,j,x0[index],y0[index],x2[index],y2[index])
+                    L3 = GL.L(i,j,x1[index],y1[index],x2[index],y2[index])
+
+                    if L1 and L2 and L3:
+                        GL.polypoint2D([i, j], colors) 
         # Exemplo:
-        gpu.GPU.draw_pixel([6, 8], gpu.GPU.RGB8, [255, 255, 0])  # altera pixel (u, v, tipo, r, g, b)
+        #gpu.GPU.draw_pixel([6, 8], gpu.GPU.RGB8, [255, 255, 0])  # altera pixel (u, v, tipo, r, g, b)
+        
 
 
     @staticmethod
