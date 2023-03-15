@@ -44,8 +44,8 @@ class GL:
         # você pode assumir o desenho dos pontos com a cor emissiva (emissiveColor).
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
-        print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
+        # print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
+        # print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
         R = colors['emissiveColor'][0]*255
         G = colors['emissiveColor'][1]*255
@@ -73,8 +73,8 @@ class GL:
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o Polyline2D
         # você pode assumir o desenho das linhas com a cor emissiva (emissiveColor).
 
-        print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
-        print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
+        # print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
+        # print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
 
         for i in range(0,len(lineSegments)-2,2):
@@ -89,6 +89,8 @@ class GL:
             sx = (1 if x0 < x1 else -1)
             sy = (1 if y0 < y1 else -1)
             
+
+            # Algoritmo de Bresenham
             while True:
                 #print("x0,y0 = ",x0,y0)
                 GL.polypoint2D([x0, y0], colors) 
@@ -125,8 +127,8 @@ class GL:
         # quantidade de pontos é sempre multiplo de 3, ou seja, 6 valores ou 12 valores, etc.
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o TriangleSet2D
         # você pode assumir o desenho das linhas com a cor emissiva (emissiveColor).
-        print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
-        print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
+        # print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
+        # print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
         # Otimização: Definindo limites do bounding box dos triângulos
         x_max = int(max([vertices[0], vertices[2], vertices[4]]))
@@ -167,7 +169,74 @@ class GL:
         print("TriangleSet : colors = {0}".format(colors)) # imprime no terminal as cores
 
         # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        #gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        
+        triangle_vertices = []
+
+        for i in range(0, len(point), 3):
+            triangle_vertices.append([ point[i], point[i+1], point[i+2], 1 ])
+
+        triangle_vertices = np.transpose(np.array(triangle_vertices))
+
+        transformed_matrix = np.matmul(GL.transformed, triangle_vertices)
+
+        viewpoint_matrix = np.transpose(np.matmul(GL.projected, transformed_matrix)) 
+        
+        points_matrix = np.copy(viewpoint_matrix)
+
+        # Divisão Homogênea (Homogeneous Divide) 
+        for i in range(len(points_matrix)):
+            points_matrix[i] /= points_matrix[i][-1]
+
+        GL.triangleSet2D(np.concatenate((points_matrix[0][:2], points_matrix[1][:2],points_matrix[2][:2])), colors)
+
+    @staticmethod
+    def translateMatrix(ex,ey,ez):
+        return np.array([[1, 0, 0,  ex],
+                         [0, 1, 0,  ey],
+                         [0, 0, 1,  ez],
+                         [0, 0, 0,   1]])
+    
+    @staticmethod
+    def scaleMatrix(x,y,z):
+        return np.array([[x,   0,  0,   0],
+                         [0,   y,  0,   0],
+                         [0,   0,  z,   0],
+                         [0,   0,  0,   1]])
+    
+    @staticmethod
+    def mirrorMatrix():
+        return np.array([[1,   0,  0,   0],
+                         [0,  -1,  0,   0],
+                         [0,   0,  1,   0],
+                         [0,   0,  0,   1]])
+
+    @staticmethod
+    def rotationMatrix(qr,qi,qj,qk):
+        termo11 = 1 - 2*(qj**2+qk**2) # termo da linha 1 coluna 1
+        termo12 = 2*(qi*qj - qk*qr) # termo da linha 1 coluna 2
+        termo13 = 2*(qi*qk + qj*qr)
+        termo21 = 2*(qi*qj + qk*qr)
+        termo22 = 1 - 2*(qi**2+qk**2)
+        termo23 = 2*(qj*qk + qi*qr)
+        termo31 = 2*(qi*qk - qj*qr)
+        termo32 = 2*(qj*qk + qi*qr)
+        termo33 = 1 - 2*(qi**2+qj**2)
+        return np.array([[termo11, termo12, termo13, 0],
+                         [termo21, termo22, termo23, 0],
+                         [termo31, termo32, termo33, 0],
+                         [      0,       0,       0, 1]])
+    
+    @staticmethod
+    def perspectiveMatrix(near,right,top,far):
+        return np.array([[near/right, 0,                           0,                          0],
+                         [0,   near/top,                           0,                          0],
+                         [0,           0, -((far+near) / (far-near)), -2*(far*near) / (far-near)],
+                         [0,           0,                         -1,                         0]])
+    
+    @staticmethod
+    def FOVy(FOVd,height,width):
+        return 2*np.arctan(np.tan(FOVd/2) * (height / (height**2+width**2)**0.5))
 
     @staticmethod
     def viewpoint(position, orientation, fieldOfView):
@@ -181,6 +250,31 @@ class GL:
         print("position = {0} ".format(position), end='')
         print("orientation = {0} ".format(orientation), end='')
         print("fieldOfView = {0} ".format(fieldOfView))
+
+        axis = np.array([orientation[0], orientation[1], orientation[2]])
+        axis = axis/np.linalg.norm(axis)
+
+        Qi = axis[0] * np.sin(orientation[3] / 2)
+        Qj = axis[1] * np.sin(orientation[3] / 2)
+        Qk = axis[2] * np.sin(orientation[3] / 2)
+        Qr = np.cos(orientation[3] / 2)
+        
+        lookAt_translation_matrix = np.linalg.inv(GL.translateMatrix(position[0],position[1],position[2]))
+        rotation_matrix = GL.rotationMatrix(Qr,Qi,Qj,Qk)
+        lookAt_matrix = np.matmul(np.transpose(rotation_matrix), lookAt_translation_matrix)
+        
+        FOVy = GL.FOVy(fieldOfView,GL.height,GL.width)
+        top = GL.near*np.tan(FOVy)
+        aspect = GL.width/GL.height
+        right = top*aspect
+
+        perspective_matrix = GL.perspectiveMatrix(GL.near,right,top,GL.far)
+        display_matrix = np.matmul(GL.translateMatrix(GL.width/2,GL.height/2,0),GL.scaleMatrix(GL.width/2,GL.height/2,1))
+        display_matrix = np.matmul(display_matrix,GL.mirrorMatrix())
+        #print(display_matrix)
+        GL.projected = np.matmul(display_matrix, perspective_matrix)
+        GL.projected = np.matmul(GL.projected, lookAt_matrix)
+
 
     @staticmethod
     def transform_in(translation, scale, rotation):
@@ -202,6 +296,18 @@ class GL:
         if rotation:
             print("rotation = {0} ".format(rotation), end='') # imprime no terminal
         print("")
+        
+        
+        axis = np.array([rotation[0], rotation[1], rotation[2]])
+        axis = axis / np.linalg.norm(axis)
+
+        Qi = axis[0] * np.sin(rotation[3] / 2)
+        Qj = axis[1] * np.sin(rotation[3] / 2)
+        Qk = axis[2] * np.sin(rotation[3] / 2)
+        Qr = np.cos(rotation[3] / 2)
+        
+        GL.transformed = np.matmul(GL.translateMatrix(translation[0], translation[1], translation[2]), GL.rotationMatrix(Qr,Qi,Qj,Qk))
+        GL.transformed = np.matmul(GL.transformed, GL.scaleMatrix(scale[0],scale[1],scale[2]))
 
     @staticmethod
     def transform_out():
