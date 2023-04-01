@@ -379,7 +379,7 @@ class GL:
             first = i*3
             second = (i+1)*3
             third = (i+2)*3
-
+            
             if i % 2 == 0:
                 order = [*point[first:first+3], *point[second:second+3], *point[third:third+3]]
                 
@@ -487,7 +487,7 @@ class GL:
             first = coordIndex[i]*3
             second = coordIndex[i+1]*3
             third = coordIndex[i+2]*3
-
+            
             if i % 2 == 0:
                 order = [*coord[first:first+3], *coord[second:second+3], *coord[third:third+3]]    
                 
