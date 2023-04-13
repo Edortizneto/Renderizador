@@ -27,6 +27,10 @@ ALTURA = 40   # Valor padrão para altura da tela
 class Renderizador:
     """Realiza a renderização da cena informada."""
 
+    # Ajuste da escala, e.g. 2x2,4x4
+    scale_x = scale_y = 2
+    SSAA = True
+
     def __init__(self):
         """Definindo valores padrão."""
         self.width = LARGURA
@@ -40,14 +44,21 @@ class Renderizador:
         """Configura o sistema para a renderização."""
         # Configurando color buffers para exibição na tela
 
-        # Cria uma (1) posição de FrameBuffer na GPU
-        fbo = gpu.GPU.gen_framebuffers(1)
+        # Cria 3 posições de FrameBuffer na GPU
+        fbo = gpu.GPU.gen_framebuffers(3)
 
-        # Define o atributo FRONT como o FrameBuffe principal
+        # Define o atributo FRONT como o FrameBuffer principal
         self.framebuffers["FRONT"] = fbo[0]
 
+        # Define o atributo DEPTH (profundidade) como o FrameBuffer secundário
+        self.framebuffers["DEPTH"] = fbo[1]
+
+        # Define o atributo SSAA (Super sampling) como o FrameBuffer terciário
+        self.framebuffers["SSAA"] = fbo[2]
+
+
         # Define que a posição criada será usada para desenho e leitura
-        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
+        # gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
         # Opções:
         # - DRAW_FRAMEBUFFER: Faz o bind só para escrever no framebuffer
         # - READ_FRAMEBUFFER: Faz o bind só para leitura no framebuffer
@@ -64,14 +75,30 @@ class Renderizador:
             self.height
         )
 
-        # Descomente as seguintes linhas se for usar um Framebuffer para profundidade
-        # gpu.GPU.framebuffer_storage(
-        #     self.framebuffers["FRONT"],
-        #     gpu.GPU.DEPTH_ATTACHMENT,
-        #     gpu.GPU.DEPTH_COMPONENT32F,
-        #     self.width,
-        #     self.height
-        # )
+        #Descomente as seguintes linhas se for usar um Framebuffer para profundidade
+        gpu.GPU.framebuffer_storage(
+            self.framebuffers["DEPTH"],
+            gpu.GPU.DEPTH_ATTACHMENT,
+            gpu.GPU.DEPTH_COMPONENT32F,
+            self.width if not Renderizador.SSAA else self.width*Renderizador.scale_x,
+            self.height if not Renderizador.SSAA else self.width*Renderizador.scale_y
+        )
+        gpu.GPU.framebuffer_storage(
+            self.framebuffers["DEPTH"],
+            gpu.GPU.COLOR_ATTACHMENT,
+            gpu.GPU.RGB8,
+            self.width if not Renderizador.SSAA else self.width*Renderizador.scale_x,
+            self.height if not Renderizador.SSAA else self.width*Renderizador.scale_y
+        )
+
+        # Memória de Framebuffer para canal de cores SSAA (Super sampling)
+        gpu.GPU.framebuffer_storage(
+            self.framebuffers["SSAA"],
+            gpu.GPU.COLOR_ATTACHMENT,
+            gpu.GPU.RGB8,
+            self.width*Renderizador.scale_x,
+            self.height*Renderizador.scale_y
+        )
     
         # Opções:
         # - COLOR_ATTACHMENT: alocações para as cores da imagem renderizada
@@ -84,6 +111,9 @@ class Renderizador:
         # - DEPTH_COMPONENT16: Para canal de Profundidade de 16bits (half-precision) (0-65535)
         # - DEPTH_COMPONENT32F: Para canal de Profundidade de 32bits (single-precision) (float)
 
+        # Define que a posição criada será usada para desenho e leitura
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["SSAA"]) if Renderizador.SSAA else gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
+
         # Define cor que ira apagar o FrameBuffer quando clear_buffer() invocado
         gpu.GPU.clear_color([0, 0, 0])
 
@@ -94,12 +124,19 @@ class Renderizador:
         # Definindo tamanho do Viewport para renderização
         self.scene.viewport(width=self.width, height=self.height)
 
+        # Z buffer integration
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["DEPTH"])
+        [gpu.GPU.draw_pixel([j,i], gpu.GPU.DEPTH_COMPONENT32F, [float("inf")]) for i in range(self.height) for j in range(self.width)]
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
+
     def pre(self):
         """Rotinas pré renderização."""
         # Função invocada antes do processo de renderização iniciar.
 
         # Limpa o frame buffers atual
         gpu.GPU.clear_buffer()
+
+        if Renderizador.SSAA: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["SSAA"])
 
         # Recursos que podem ser úteis:
         # Define o valor do pixel no framebuffer: draw_pixel(coord, mode, data)
@@ -108,7 +145,16 @@ class Renderizador:
     def pos(self):
         """Rotinas pós renderização."""
         # Função invocada após o processo de renderização terminar.
+        if Renderizador.SSAA:
+            gpu.GPU.bind_framebuffer(gpu.GPU.DRAW_FRAMEBUFFER, self.framebuffers["FRONT"])
+            scale_factor = 1.0 / min(Renderizador.scale_x,Renderizador.scale_y)**2
+            for rows in range(0, self.height * Renderizador.scale_y, Renderizador.scale_y):
+                for cols in range(0, self.width * Renderizador.scale_x, Renderizador.scale_x):
+                    colors = [] 
+                    [colors.append(gpu.GPU.read_pixel([j+cols, i+rows], gpu.GPU.RGB8) * scale_factor) for i in range(Renderizador.scale_y) for j in range(Renderizador.scale_x)]
+                    gpu.GPU.draw_pixel([cols // Renderizador.scale_x, rows // Renderizador.scale_y], gpu.GPU.RGB8, [sum(color) for color in zip(*colors)])
 
+            gpu.GPU.bind_framebuffer(gpu.GPU.READ_FRAMEBUFFER, self.framebuffers["FRONT"])
         # Método para a troca dos buffers (NÃO IMPLEMENTADO)
         gpu.GPU.swap_buffers()
 
@@ -171,14 +217,6 @@ class Renderizador:
         # Abre arquivo X3D
         self.scene = x3d.X3D(self.x3d_file)
 
-        # Iniciando Biblioteca Gráfica
-        gl.GL.setup(
-            self.width,
-            self.height,
-            near=0.01,
-            far=1000
-        )
-
         # Funções que irão fazer o rendering
         self.mapping()
 
@@ -195,6 +233,26 @@ class Renderizador:
 
         # Configura o sistema para a renderização.
         self.setup()
+
+        # Iniciando Biblioteca Gráfica
+        if Renderizador.SSAA:
+            gl.GL.setup(
+                self.framebuffers.get("DEPTH"),
+                self.framebuffers.get("SSAA"),
+                self.width*Renderizador.scale_x,
+                self.height*Renderizador.scale_y,
+                near=0.01,
+                far=1000
+            )
+        else:
+            gl.GL.setup(
+                self.framebuffers.get("DEPTH"),
+                self.framebuffers.get("SSAA"),
+                self.width,
+                self.height,
+                near=0.01,
+                far=1000
+            )
 
         # Se no modo silencioso salvar imagem e não mostrar janela de visualização
         if args.quiet:

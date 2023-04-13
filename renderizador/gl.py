@@ -38,10 +38,12 @@ class GL:
     height = 600  # altura da tela
     near = 0.01   # plano de corte próximo
     far = 1000    # plano de corte distante
-
+    
     @staticmethod
-    def setup(width, height, near=0.01, far=1000):
+    def setup(DEPTH, DRAW, width, height, near=0.01, far=1000):
         """Definr parametros para câmera de razão de aspecto, plano próximo e distante."""
+        GL.DEPTH = DEPTH
+        GL.DRAW = DRAW
         GL.width = width
         GL.height = height
         GL.near = near
@@ -148,7 +150,6 @@ class GL:
         # print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
         # print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        
         for i in range(0,len(vertices),6):
             
             # Otimização: Definindo limites do bounding box dos triângulos
@@ -165,7 +166,6 @@ class GL:
                     L3 = GL.L(vertices[i+4], vertices[i+5], vertices[i+0], vertices[i+1], x, y)
                     if L1 >= 0 and L2 >= 0 and L3 >= 0:
                         GL.polypoint2D([x, y], colors)
-
 
     @staticmethod
     def triangleSet(point, colors):
@@ -208,7 +208,59 @@ class GL:
             points_matrix[i] /= points_matrix[i][-1]
 
         for i in range(0,len(points_matrix),3):
-            GL.triangleSet2D(np.concatenate((points_matrix[i+0][:2], points_matrix[i+1][:2],points_matrix[i+2][:2])), colors)
+            #GL.triangleSet2D(np.concatenate((points_matrix[i+0][:2], points_matrix[i+1][:2],points_matrix[i+2][:2])), colors)
+            Zs = [points_matrix[i][2],points_matrix[i+1][2],points_matrix[i+2][2]]
+            point1,point2,point3 = points_matrix[i+0][:2], points_matrix[i+1][:2],points_matrix[i+2][:2]
+                # Otimização: Definindo limites do bounding box dos triângulos
+            x_max = int(max([point1[0], point2[0], point3[0]]))
+            x_min = int(min([point1[0], point2[0], point3[0]]))
+            y_max = int(max([point1[1], point2[1], point3[1]]))
+            y_min = int(min([point1[1], point2[1], point3[1]]))
+            if type(colors) is list:
+                C1,C2,C3 = colors[:3],colors[3:6],colors[6:]
+            for x in range(x_min, x_max + 1):
+                for y in range(y_min, y_max + 1):
+                    L1 = GL.L(point1[0], point1[1], point2[0], point2[1], x, y)
+                    L2 = GL.L(point2[0], point2[1], point3[0], point3[1], x, y)
+                    L3 = GL.L(point3[0], point3[1], point1[0], point1[1], x, y)
+                    if L1 >= 0 and L2 >= 0 and L3 >= 0:
+                        #GL.polypoint2D([x, y], colors)
+                        
+                        # Interpolação
+                        xA,yA = point1
+                        xB,yB = point2
+                        xC,yC = point3
+                        # Definindo as coordenadas baricêntricas alpha, beta e gama
+                        alpha = (-(x-xB) * (yC-yB) + (y-yB) * (xC-xB)) / (-(xA-xB) * (yC-yB) + (yA-yB) * (xC-xB))
+                        beta = (-(x-xC) * (yA-yC) + (y-yC) * (xA-xC)) / (-(xB-xC) * (yA-yC) + (yB-yC) * (xA-xC))
+                        gama = 1 - alpha - beta
+                        Z1, Z2, Z3 = Zs
+                        # Retorna a Média harmônica ponderada
+                        Z = 1 / (alpha / Z1 + beta / Z2 + gama / Z3)
+
+                        if type(colors) is list:
+                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DEPTH) 
+                            if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
+                                # C1 = np.array(C1,dtype=np.float32)*alpha
+                                Cs = [[alpha*color for color in C1], [beta *color for color in C2], [gama *color for color in C3]]
+                                _color = [sum(c * 255) for c in zip(*Cs)]
+                                gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
+                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
+                                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW) 
+                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, _color)
+                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
+                        else:
+                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DEPTH)
+                            if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
+                                gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
+                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
+                                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
+                                pixel_color = gpu.GPU.read_pixel([x,y], gpu.GPU.RGB8)
+                                pixel_color = [c * colors["transparency"] for c in pixel_color]
+                                emissive_color = [c * (1-colors["transparency"]) for c in colors["emissiveColor"]]
+                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, np.clip([int(sum(c * 255)) for c in zip(emissive_color, pixel_color)], 0, 255))
+                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
+
 
     @staticmethod
     def translateMatrix(ex,ey,ez):
@@ -482,19 +534,29 @@ class GL:
 
         # Exemplo de desenho de um pixel branco na coordenada 10, 10
         # gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
-
+        
         for i in range(0,len(coordIndex)-3,4):
             first = coordIndex[i]*3
             second = coordIndex[i+1]*3
             third = coordIndex[i+2]*3
             
+            if len(colorIndex) > 0:
+                color1 = colorIndex[i]*3
+                color2 = colorIndex[i+1]*3
+                color3 = colorIndex[i+2]*3
+            
             if i % 2 == 0:
-                order = [*coord[first:first+3], *coord[second:second+3], *coord[third:third+3]]    
+                order = [*coord[first:first+3], *coord[second:second+3], *coord[third:third+3]]
+                if len(colorIndex) > 0:
+                    order_colors = [*color[color1:color1+3], *color[color2:color2+3], *color[color3:color3+3]]
                 
             else:
                 order = [*coord[second:second+3], *coord[first:first+3], *coord[third:third+3]]
+                if len(colorIndex) > 0:
+                    order_colors = [*color[color2:color2+3], *color[color1:color1+3], *color[color3:color3+3]]
 
-            GL.triangleSet(order,colors)
+            if len(colorIndex) > 0: GL.triangleSet(order,order_colors)
+            else: GL.triangleSet(order,colors)
 
     @staticmethod
     def sphere(radius, colors):
