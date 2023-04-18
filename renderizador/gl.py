@@ -598,10 +598,10 @@ class GL:
         y = radius*np.sin(u)*np.sin(v)
         z = radius*np.cos(v)
         for i in range(len(x)):
-            ring = []
+            circ = []
             for j in range(len(x[i])):
-                ring.append([x[i,j],y[i,j],z[i,j]])
-            coords.append(ring)
+                circ.append([x[i,j],y[i,j],z[i,j]])
+            coords.append(circ)
         for i in range(len(coords)-1):
             strip_seq = []
             strip_seq += coords[i][0]
@@ -612,8 +612,8 @@ class GL:
                 strip_seq += coords[i][k]
                 strip_seq += coords[i+1][k]   
             
-            indexed_coords = [i for i in range(int(len(strip_seq)/3))]
-            GL.indexedTriangleStripSet(strip_seq, indexed_coords, colors)
+            index_seq = [i for i in range(len(strip_seq)//3)]
+            GL.indexedTriangleStripSet(strip_seq, index_seq, colors)
 
     @staticmethod
     def navigationInfo(headlight):
