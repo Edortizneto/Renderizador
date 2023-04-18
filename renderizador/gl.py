@@ -612,8 +612,8 @@ class GL:
                 strip_seq += coords[i][k]
                 strip_seq += coords[i+1][k]   
             
-            indexed_cords = [i for i in range(int(len(strip_seq)/3))]
-            GL.indexedTriangleStripSet(strip_seq, indexed_cords, colors)
+            indexed_coords = [i for i in range(int(len(strip_seq)/3))]
+            GL.indexedTriangleStripSet(strip_seq, indexed_coords, colors)
 
     @staticmethod
     def navigationInfo(headlight):
