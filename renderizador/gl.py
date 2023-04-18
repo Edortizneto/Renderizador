@@ -240,26 +240,28 @@ class GL:
 
                         if type(colors) is list:
                             gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DEPTH) 
-                            if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
-                                # C1 = np.array(C1,dtype=np.float32)*alpha
-                                Cs = [[alpha*color for color in C1], [beta *color for color in C2], [gama *color for color in C3]]
-                                _color = [sum(c * 255) for c in zip(*Cs)]
-                                gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
-                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
-                                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW) 
-                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, _color)
-                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
+                            if (x > 0 and x < GL.width) and (y > 0 and y < GL.height):
+                                if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
+                                    # C1 = np.array(C1,dtype=np.float32)*alpha
+                                    Cs = [[alpha*color for color in C1], [beta *color for color in C2], [gama *color for color in C3]]
+                                    _color = [sum(c * 255) for c in zip(*Cs)]
+                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
+                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
+                                    gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW) 
+                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, _color)
+                                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
                         else:
                             gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DEPTH)
-                            if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
-                                gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
-                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
+                            if (x > 0 and x < GL.width) and (y > 0 and y < GL.height):
+                                if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
+                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
+                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
+                                    gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
+                                    pixel_color = gpu.GPU.read_pixel([x,y], gpu.GPU.RGB8)
+                                    pixel_color = [c * colors["transparency"] for c in pixel_color]
+                                    emissive_color = [c * (1-colors["transparency"]) for c in colors["emissiveColor"]]
+                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, np.clip([int(sum(c * 255)) for c in zip(emissive_color, pixel_color)], 0, 255))
                                 gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
-                                pixel_color = gpu.GPU.read_pixel([x,y], gpu.GPU.RGB8)
-                                pixel_color = [c * colors["transparency"] for c in pixel_color]
-                                emissive_color = [c * (1-colors["transparency"]) for c in colors["emissiveColor"]]
-                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, np.clip([int(sum(c * 255)) for c in zip(emissive_color, pixel_color)], 0, 255))
-                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
 
 
     @staticmethod
@@ -488,11 +490,32 @@ class GL:
         # encontre os vértices e defina os triângulos.
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Box : size = {0}".format(size)) # imprime no terminal pontos
-        print("Box : colors = {0}".format(colors)) # imprime no terminal as cores
+        #print("Box : size = {0}".format(size)) # imprime no terminal pontos
+        #print("Box : colors = {0}".format(colors)) # imprime no terminal as cores
 
         # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        #gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+
+        x,y,z = size[0],size[1],size[2]
+        vertices = [0.5*x, 0.5*y, 0.5*z, 
+                    -0.5*x, 0.5*y, 0.5*z,
+                    0.5*x, -0.5*y, 0.5*z,
+                    -0.5*x, -0.5*y, 0.5*z,
+                    0.5*x, 0.5*y, -0.5*z, 
+                    -0.5*x, 0.5*y, -0.5*z, 
+                    -0.5*x, -0.5*y, -0.5*z, 
+                    0.5*x, -0.5*y, -0.5*z]
+
+        
+        indexes = [[0, 1, 2, -1, 1, 3, 2, -1],
+                   [0, 4, 1, -1, 4, 5, 1, -1],
+                   [1, 5, 3, -1, 5, 6, 3, -1],
+                   [3, 6, 2, -1, 6, 7, 2, -1],
+                   [2, 7, 0, -1, 7, 4, 0, -1],
+                   [4, 7, 5, -1, 7, 6, 5, -1]]
+        
+        for i in range(len(indexes)):
+            GL.indexedFaceSet(coord=vertices, coordIndex=indexes[i], colors=colors, colorPerVertex=False, color=None, colorIndex=[], texCoord=None, texCoordIndex=None, current_texture=None)
 
     @staticmethod
     def indexedFaceSet(coord, coordIndex, colorPerVertex, color, colorIndex,
@@ -534,7 +557,6 @@ class GL:
 
         # Exemplo de desenho de um pixel branco na coordenada 10, 10
         # gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
-        
         for i in range(0,len(coordIndex)-3,4):
             first = coordIndex[i]*3
             second = coordIndex[i+1]*3
@@ -568,8 +590,30 @@ class GL:
         # os triângulos.
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Sphere : radius = {0}".format(radius)) # imprime no terminal o raio da esfera
-        print("Sphere : colors = {0}".format(colors)) # imprime no terminal as cores
+        #print("Sphere : radius = {0}".format(radius)) # imprime no terminal o raio da esfera
+        # print("Sphere : colors = {0}".format(colors)) # imprime no terminal as cores
+        coords = []
+        u, v = np.mgrid[0:2*np.pi:32j, 0:np.pi:32j]
+        x = radius*np.cos(u)*np.sin(v)
+        y = radius*np.sin(u)*np.sin(v)
+        z = radius*np.cos(v)
+        for i in range(len(x)):
+            ring = []
+            for j in range(len(x[i])):
+                ring.append([x[i,j],y[i,j],z[i,j]])
+            coords.append(ring)
+        for i in range(len(coords)-1):
+            strip_seq = []
+            strip_seq += coords[i][0]
+            strip_seq += coords[i+1][0]
+            strip_seq += coords[i][-1]
+            strip_seq += coords[i+1][-1]
+            for k in range(len(coords[i])):
+                strip_seq += coords[i][k]
+                strip_seq += coords[i+1][k]   
+            
+            indexed_cords = [i for i in range(int(len(strip_seq)/3))]
+            GL.indexedTriangleStripSet(strip_seq, indexed_cords, colors)
 
     @staticmethod
     def navigationInfo(headlight):
