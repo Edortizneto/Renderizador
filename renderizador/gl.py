@@ -238,31 +238,23 @@ class GL:
                         # Retorna a Média harmônica ponderada
                         Z = 1 / (alpha / Z1 + beta / Z2 + gama / Z3)
 
-                        if type(colors) is list:
-                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DEPTH) 
-                            if (x > 0 and x < GL.width) and (y > 0 and y < GL.height):
-                                if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
-                                    # C1 = np.array(C1,dtype=np.float32)*alpha
+                        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DEPTH) 
+                        if (x > 0 and x < GL.width) and (y > 0 and y < GL.height):
+                            if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
+                                if type(colors) is list:
                                     Cs = [[alpha*color for color in C1], [beta *color for color in C2], [gama *color for color in C3]]
                                     _color = [sum(c * 255) for c in zip(*Cs)]
-                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
-                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
-                                    gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW) 
-                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, _color)
+                                gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
+                                gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
                                 gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
-                        else:
-                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DEPTH)
-                            if (x > 0 and x < GL.width) and (y > 0 and y < GL.height):
-                                if (Z < gpu.GPU.read_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F)):
-                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.DEPTH_COMPONENT32F, [Z])
-                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, 3*[Z*255])
-                                    gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
+                                if type(colors) is list:
+                                    gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, _color)
+                                else:
                                     pixel_color = gpu.GPU.read_pixel([x,y], gpu.GPU.RGB8)
                                     pixel_color = [c * colors["transparency"] for c in pixel_color]
                                     emissive_color = [c * (1-colors["transparency"]) for c in colors["emissiveColor"]]
                                     gpu.GPU.draw_pixel([x,y], gpu.GPU.RGB8, np.clip([int(sum(c * 255)) for c in zip(emissive_color, pixel_color)], 0, 255))
-                                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
-
+                            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.DRAW)
 
     @staticmethod
     def translateMatrix(ex,ey,ez):
